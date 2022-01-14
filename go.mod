@@ -6,7 +6,7 @@ require (
 	github.com/ClickHouse/clickhouse-go v1.4.3
 	github.com/cpuguy83/go-md2man/v2 v2.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/frankban/quicktest v1.11.3 // indirect
+	github.com/fatih/color v1.13.0
 	github.com/go-sql-driver/mysql v1.6.0
 	github.com/joho/godotenv v1.3.0
 	github.com/kami-zh/go-capturer v0.0.0-20171211120116-e492ea43421d

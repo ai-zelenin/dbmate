@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/fatih/color"
 	"log"
 	"net/url"
 	"os"
@@ -36,7 +37,9 @@ func NewApp() *cli.App {
 	app.Name = "dbmate"
 	app.Usage = "A lightweight, framework-independent database migration tool."
 	app.Version = dbmate.Version
-
+	app.ExitErrHandler = func(c *cli.Context, err error) {
+		dbmate.Log.PrintColor(color.FgRed, err.Error())
+	}
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:    "url",

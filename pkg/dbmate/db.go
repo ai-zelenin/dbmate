@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/fatih/color"
 	"io"
 	"net/url"
 	"os"
@@ -107,22 +108,22 @@ func (db *DB) wait(drv Driver) error {
 		return nil
 	}
 
-	fmt.Fprint(db.Log, "Waiting for database")
+	Log.Fprint(db.Log, "Waiting for database")
 	for i := 0 * time.Second; i < db.WaitTimeout; i += db.WaitInterval {
-		fmt.Fprint(db.Log, ".")
+		Log.Fprint(db.Log, ".")
 		time.Sleep(db.WaitInterval)
 
 		// attempt connection to database server
 		err = drv.Ping()
 		if err == nil {
 			// connection successful
-			fmt.Fprint(db.Log, "\n")
+			Log.Fprint(db.Log, "\n")
 			return nil
 		}
 	}
 
 	// if we find outselves here, we could not connect within the timeout
-	fmt.Fprint(db.Log, "\n")
+	Log.Fprint(db.Log, "\n")
 	return fmt.Errorf("unable to connect to database: %s", err)
 }
 
@@ -217,7 +218,7 @@ func (db *DB) dumpSchema(drv Driver) error {
 		return err
 	}
 
-	fmt.Fprintf(db.Log, "Writing: %s\n", db.SchemaFile)
+	Log.Fprintf(db.Log, "Writing: %s\n", db.SchemaFile)
 
 	// ensure schema directory exists
 	if err = ensureDir(filepath.Dir(db.SchemaFile)); err != nil {
@@ -255,7 +256,7 @@ func (db *DB) NewMigration(name string) error {
 
 	// check file does not already exist
 	path := filepath.Join(db.MigrationsDir, name)
-	fmt.Fprintf(db.Log, "Creating migration: %s\n", path)
+	Log.Fprintf(db.Log, "Creating migration: %s\n", path)
 
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return fmt.Errorf("file already exists")
@@ -348,7 +349,7 @@ func (db *DB) migrate(drv Driver) error {
 			continue
 		}
 
-		fmt.Fprintf(db.Log, "Applying: %s\n", filename)
+		Log.PrintColor(color.FgHiYellow, "Applying: %s", filename)
 
 		up, _, err := parseMigration(filepath.Join(db.MigrationsDir, filename))
 		if err != nil {
@@ -357,13 +358,16 @@ func (db *DB) migrate(drv Driver) error {
 
 		execMigration := func(tx dbutil.Transaction) error {
 			// run actual migration
-			result, err := tx.Exec(up.Contents)
-			if err != nil {
-				return err
-			} else if db.Verbose {
+			statements := NewSQLStatementSplitter().Split(up.Contents)
+			for _, statement := range statements {
+				Log.PrintColor(color.FgBlue, "Statement:")
+				Log.PrintColor(color.FgWhite, "%s", statement)
+				result, err := tx.Exec(statement)
+				if err != nil {
+					return err
+				}
 				db.printVerbose(result)
 			}
-
 			// record migration
 			return drv.InsertMigration(tx, ver)
 		}
@@ -392,11 +396,11 @@ func (db *DB) migrate(drv Driver) error {
 func (db *DB) printVerbose(result sql.Result) {
 	lastInsertID, err := result.LastInsertId()
 	if err == nil {
-		fmt.Fprintf(db.Log, "Last insert ID: %d\n", lastInsertID)
+		Log.PrintColor(color.FgGreen, "Last insert ID: %d", lastInsertID)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err == nil {
-		fmt.Fprintf(db.Log, "Rows affected: %d\n", rowsAffected)
+		Log.PrintColor(color.FgGreen, "Rows affected: %d", rowsAffected)
 	}
 }
 
@@ -488,7 +492,7 @@ func (db *DB) Rollback() error {
 		return err
 	}
 
-	fmt.Fprintf(db.Log, "Rolling back: %s\n", filename)
+	Log.Fprintf(db.Log, "Rolling back: %s\n", filename)
 
 	_, down, err := parseMigration(filepath.Join(db.MigrationsDir, filename))
 	if err != nil {
@@ -551,15 +555,15 @@ func (db *DB) Status(quiet bool) (int, error) {
 			line = fmt.Sprintf("[ ] %s", res.Filename)
 		}
 		if !quiet {
-			fmt.Fprintln(db.Log, line)
+			Log.Fprintln(db.Log, line)
 		}
 	}
 
 	totalPending := len(results) - totalApplied
 	if !quiet {
-		fmt.Fprintln(db.Log)
-		fmt.Fprintf(db.Log, "Applied: %d\n", totalApplied)
-		fmt.Fprintf(db.Log, "Pending: %d\n", totalPending)
+		Log.Fprintln(db.Log)
+		Log.Fprintf(db.Log, "Applied: %d\n", totalApplied)
+		Log.Fprintf(db.Log, "Pending: %d\n", totalPending)
 	}
 
 	return totalPending, nil
