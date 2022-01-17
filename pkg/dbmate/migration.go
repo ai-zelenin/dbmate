@@ -32,7 +32,7 @@ func (m migrationOptions) Transaction() bool {
 func (m migrationOptions) StatementSplit() StatementSplit {
 	val := m["split"]
 	if val == "" {
-		return StatementSplitAuto
+		return StatementSplitNone
 	}
 	return StatementSplit(val)
 }

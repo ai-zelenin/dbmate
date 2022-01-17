@@ -1,10 +1,8 @@
 package dbmate
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
-	"time"
 )
 
 type IgnoreToken struct {
@@ -33,7 +31,6 @@ func NewSQLStatementSplitter() *SQLStatementSplitter {
 
 func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 	var ignoreMatrix = make([][]IgnoreToken, 0)
-	t := time.Now()
 	for _, pattern := range s.autoIgnorePatterns {
 		matches := pattern.FindAllStringIndex(text, -1)
 		ignores := make([]IgnoreToken, 0)
@@ -45,7 +42,6 @@ func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 			ignores = append(ignores, ignore)
 		}
 		ignoreMatrix = append(ignoreMatrix, ignores)
-		fmt.Printf("%s %s \n", pattern, time.Now().Sub(t))
 	}
 
 	splitIndexes := make([]int, 0)
@@ -68,31 +64,6 @@ func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 			splitIndexes = append(splitIndexes, i+1)
 		}
 	}
-	//i := 0
-	//for {
-	//	if i >= len(text) {
-	//		break
-	//	}
-	//	r := text[i]
-	//	skip := false
-	//	for _, ignores := range ignoreMatrix {
-	//		if skip {
-	//			break
-	//		}
-	//		for _, ignore := range ignores {
-	//			if i >= ignore.BeginIndex && i < ignore.EndIndex {
-	//				skip = true
-	//				break
-	//			}
-	//		}
-	//
-	//	}
-	//	if r == ';' && !skip {
-	//		splitIndexes = append(splitIndexes, i+1)
-	//	}
-	//	i++
-	//}
-	fmt.Printf("run %s \n", time.Now().Sub(t))
 	return s.splitByIndexes(text, splitIndexes)
 }
 

@@ -363,9 +363,7 @@ func (db *DB) migrate(drv Driver) error {
 		case StatementSplitManual:
 			statements = NewSQLStatementSplitter().SplitManual(up.Contents)
 		case StatementSplitAuto:
-			t := time.Now()
 			statements = NewSQLStatementSplitter().SplitAuto(up.Contents)
-			fmt.Printf("%s\n", time.Now().Sub(t))
 		default:
 			panic("unknown statement split type")
 		}
