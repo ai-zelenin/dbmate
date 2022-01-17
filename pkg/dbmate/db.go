@@ -356,47 +356,34 @@ func (db *DB) migrate(drv Driver) error {
 		if db.Verbose {
 			Log.PrintLnColor(color.FgHiYellow, "SplitPolicy: %s", up.Options.StatementSplit())
 		}
-		var execMigration func(tx dbutil.Transaction) error
+		var statements []string
 		switch up.Options.StatementSplit() {
 		case StatementSplitNone:
-			execMigration = func(tx dbutil.Transaction) error {
-				result, err := tx.Exec(up.Contents)
+			statements = []string{up.Contents}
+		case StatementSplitManual:
+			statements = NewSQLStatementSplitter().SplitManual(up.Contents)
+		case StatementSplitAuto:
+			t := time.Now()
+			statements = NewSQLStatementSplitter().SplitAuto(up.Contents)
+			fmt.Printf("%s\n", time.Now().Sub(t))
+		default:
+			panic("unknown statement split type")
+		}
+		execMigration := func(tx dbutil.Transaction) error {
+			for _, statement := range statements {
+				if db.Verbose {
+					Log.PrintLnColor(color.FgBlue, "Statement:")
+					Log.PrintLnColor(color.FgWhite, "%s", statement)
+				}
+				result, err := tx.Exec(statement)
 				if err != nil {
 					return err
 				}
-				db.printVerbose(result)
-				return drv.InsertMigration(tx, ver)
-			}
-		case StatementSplitManual:
-			execMigration = func(tx dbutil.Transaction) error {
-				statements := NewSQLStatementSplitter().SplitManual(up.Contents)
-				for _, statement := range statements {
-					Log.PrintLnColor(color.FgBlue, "Statement:")
-					Log.PrintLnColor(color.FgWhite, "%s", statement)
-					result, err := tx.Exec(statement)
-					if err != nil {
-						return err
-					}
+				if db.Verbose {
 					db.printVerbose(result)
 				}
-				return drv.InsertMigration(tx, ver)
 			}
-		case StatementSplitAuto:
-			execMigration = func(tx dbutil.Transaction) error {
-				statements := NewSQLStatementSplitter().SplitAuto(up.Contents)
-				for _, statement := range statements {
-					Log.PrintLnColor(color.FgBlue, "Statement:")
-					Log.PrintLnColor(color.FgWhite, "%s", statement)
-					result, err := tx.Exec(statement)
-					if err != nil {
-						return err
-					}
-					db.printVerbose(result)
-				}
-				return drv.InsertMigration(tx, ver)
-			}
-		default:
-			panic("unknown statement split type")
+			return drv.InsertMigration(tx, ver)
 		}
 
 		if up.Options.Transaction() {

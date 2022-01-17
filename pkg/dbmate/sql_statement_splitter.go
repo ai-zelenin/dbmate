@@ -1,14 +1,13 @@
 package dbmate
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type IgnoreToken struct {
-	BeginSeq   string
-	EndSeq     string
-	Pattern    *regexp.Regexp
 	Flag       bool
 	BeginIndex int
 	EndIndex   int
@@ -16,6 +15,7 @@ type IgnoreToken struct {
 
 type SQLStatementSplitter struct {
 	autoIgnorePatterns []*regexp.Regexp
+	autoSplitPattern   *regexp.Regexp
 	manualSplitPattern *regexp.Regexp
 }
 
@@ -26,12 +26,14 @@ func NewSQLStatementSplitter() *SQLStatementSplitter {
 			regexp.MustCompile(`(?sU:'.*')`),
 			regexp.MustCompile(`(?sU:\$[a-zA-Z_]*\$.*\$[a-zA-Z_]*\$)`),
 		},
+		autoSplitPattern:   regexp.MustCompile(`;`),
 		manualSplitPattern: regexp.MustCompile(`--\s?-{2,}`),
 	}
 }
 
 func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 	var ignoreMatrix = make([][]IgnoreToken, 0)
+	t := time.Now()
 	for _, pattern := range s.autoIgnorePatterns {
 		matches := pattern.FindAllStringIndex(text, -1)
 		ignores := make([]IgnoreToken, 0)
@@ -43,16 +45,13 @@ func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 			ignores = append(ignores, ignore)
 		}
 		ignoreMatrix = append(ignoreMatrix, ignores)
+		fmt.Printf("%s %s \n", pattern, time.Now().Sub(t))
 	}
 
 	splitIndexes := make([]int, 0)
-
-	i := 0
-	for {
-		if i >= len(text) {
-			break
-		}
-		r := text[i]
+	probableSplitIndex := s.autoSplitPattern.FindAllStringIndex(text, -1)
+	for _, bn := range probableSplitIndex {
+		i := bn[0]
 		skip := false
 		for _, ignores := range ignoreMatrix {
 			if skip {
@@ -64,14 +63,36 @@ func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 					break
 				}
 			}
-
 		}
-		if r == ';' && !skip {
+		if !skip {
 			splitIndexes = append(splitIndexes, i+1)
 		}
-		i++
 	}
-
+	//i := 0
+	//for {
+	//	if i >= len(text) {
+	//		break
+	//	}
+	//	r := text[i]
+	//	skip := false
+	//	for _, ignores := range ignoreMatrix {
+	//		if skip {
+	//			break
+	//		}
+	//		for _, ignore := range ignores {
+	//			if i >= ignore.BeginIndex && i < ignore.EndIndex {
+	//				skip = true
+	//				break
+	//			}
+	//		}
+	//
+	//	}
+	//	if r == ';' && !skip {
+	//		splitIndexes = append(splitIndexes, i+1)
+	//	}
+	//	i++
+	//}
+	fmt.Printf("run %s \n", time.Now().Sub(t))
 	return s.splitByIndexes(text, splitIndexes)
 }
 
