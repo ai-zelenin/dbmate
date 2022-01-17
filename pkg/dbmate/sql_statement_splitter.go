@@ -2,7 +2,6 @@ package dbmate
 
 import (
 	"regexp"
-	"sort"
 	"strings"
 )
 
@@ -23,7 +22,8 @@ type SQLStatementSplitter struct {
 func NewSQLStatementSplitter() *SQLStatementSplitter {
 	return &SQLStatementSplitter{
 		autoIgnorePatterns: []*regexp.Regexp{
-			regexp.MustCompile(`--.*\n|'.*'`),
+			regexp.MustCompile(`--.*\n`),
+			regexp.MustCompile(`(?sU:'.*')`),
 			regexp.MustCompile(`(?sU:\$[a-zA-Z_]*\$.*\$[a-zA-Z_]*\$)`),
 		},
 		manualSplitPattern: regexp.MustCompile(`--\s?-{2,}`),
@@ -31,9 +31,10 @@ func NewSQLStatementSplitter() *SQLStatementSplitter {
 }
 
 func (s *SQLStatementSplitter) SplitAuto(text string) []string {
-	var ignores = make([]IgnoreToken, 0)
+	var ignoreMatrix = make([][]IgnoreToken, 0)
 	for _, pattern := range s.autoIgnorePatterns {
 		matches := pattern.FindAllStringIndex(text, -1)
+		ignores := make([]IgnoreToken, 0)
 		for _, match := range matches {
 			ignore := IgnoreToken{
 				BeginIndex: match[0],
@@ -41,10 +42,8 @@ func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 			}
 			ignores = append(ignores, ignore)
 		}
+		ignoreMatrix = append(ignoreMatrix, ignores)
 	}
-	sort.Slice(ignores, func(i, j int) bool {
-		return ignores[i].BeginIndex < ignores[j].BeginIndex
-	})
 
 	splitIndexes := make([]int, 0)
 
@@ -55,11 +54,17 @@ func (s *SQLStatementSplitter) SplitAuto(text string) []string {
 		}
 		r := text[i]
 		skip := false
-		for _, ignore := range ignores {
-			if i >= ignore.BeginIndex && i < ignore.EndIndex {
-				skip = true
+		for _, ignores := range ignoreMatrix {
+			if skip {
 				break
 			}
+			for _, ignore := range ignores {
+				if i >= ignore.BeginIndex && i < ignore.EndIndex {
+					skip = true
+					break
+				}
+			}
+
 		}
 		if r == ';' && !skip {
 			splitIndexes = append(splitIndexes, i+1)

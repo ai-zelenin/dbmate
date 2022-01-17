@@ -348,12 +348,13 @@ func (db *DB) migrate(drv Driver) error {
 			// migration already applied
 			continue
 		}
-
 		Log.PrintLnColor(color.FgHiYellow, "Applying: %s", filename)
-
 		up, _, err := parseMigration(filepath.Join(db.MigrationsDir, filename))
 		if err != nil {
 			return err
+		}
+		if db.Verbose {
+			Log.PrintLnColor(color.FgHiYellow, "SplitPolicy: %s", up.Options.StatementSplit())
 		}
 		var execMigration func(tx dbutil.Transaction) error
 		switch up.Options.StatementSplit() {
