@@ -7,9 +7,18 @@ import (
 	"strings"
 )
 
+type StatementSplit string
+
+const (
+	StatementSplitAuto   StatementSplit = "auto"
+	StatementSplitManual StatementSplit = "manual"
+	StatementSplitNone   StatementSplit = "none"
+)
+
 // MigrationOptions is an interface for accessing migration options
 type MigrationOptions interface {
 	Transaction() bool
+	StatementSplit() StatementSplit
 }
 
 type migrationOptions map[string]string
@@ -18,6 +27,14 @@ type migrationOptions map[string]string
 // Defaults to true.
 func (m migrationOptions) Transaction() bool {
 	return m["transaction"] != "false"
+}
+
+func (m migrationOptions) StatementSplit() StatementSplit {
+	val := m["statement"]
+	if val == "" {
+		return StatementSplitAuto
+	}
+	return StatementSplit(val)
 }
 
 // Migration contains the migration contents and options

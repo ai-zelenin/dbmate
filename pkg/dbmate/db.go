@@ -349,27 +349,53 @@ func (db *DB) migrate(drv Driver) error {
 			continue
 		}
 
-		Log.PrintColor(color.FgHiYellow, "Applying: %s", filename)
+		Log.PrintLnColor(color.FgHiYellow, "Applying: %s", filename)
 
 		up, _, err := parseMigration(filepath.Join(db.MigrationsDir, filename))
 		if err != nil {
 			return err
 		}
-
-		execMigration := func(tx dbutil.Transaction) error {
-			// run actual migration
-			statements := NewSQLStatementSplitter().Split(up.Contents)
-			for _, statement := range statements {
-				Log.PrintColor(color.FgBlue, "Statement:")
-				Log.PrintColor(color.FgWhite, "%s", statement)
-				result, err := tx.Exec(statement)
+		var execMigration func(tx dbutil.Transaction) error
+		switch up.Options.StatementSplit() {
+		case StatementSplitNone:
+			execMigration = func(tx dbutil.Transaction) error {
+				result, err := tx.Exec(up.Contents)
 				if err != nil {
 					return err
 				}
 				db.printVerbose(result)
+				return drv.InsertMigration(tx, ver)
 			}
-			// record migration
-			return drv.InsertMigration(tx, ver)
+		case StatementSplitManual:
+			execMigration = func(tx dbutil.Transaction) error {
+				statements := NewSQLStatementSplitter().SplitManual(up.Contents)
+				for _, statement := range statements {
+					Log.PrintLnColor(color.FgBlue, "Statement:")
+					Log.PrintLnColor(color.FgWhite, "%s", statement)
+					result, err := tx.Exec(statement)
+					if err != nil {
+						return err
+					}
+					db.printVerbose(result)
+				}
+				return drv.InsertMigration(tx, ver)
+			}
+		case StatementSplitAuto:
+			execMigration = func(tx dbutil.Transaction) error {
+				statements := NewSQLStatementSplitter().SplitAuto(up.Contents)
+				for _, statement := range statements {
+					Log.PrintLnColor(color.FgBlue, "Statement:")
+					Log.PrintLnColor(color.FgWhite, "%s", statement)
+					result, err := tx.Exec(statement)
+					if err != nil {
+						return err
+					}
+					db.printVerbose(result)
+				}
+				return drv.InsertMigration(tx, ver)
+			}
+		default:
+			panic("unknown statement split type")
 		}
 
 		if up.Options.Transaction() {
@@ -396,11 +422,11 @@ func (db *DB) migrate(drv Driver) error {
 func (db *DB) printVerbose(result sql.Result) {
 	lastInsertID, err := result.LastInsertId()
 	if err == nil {
-		Log.PrintColor(color.FgGreen, "Last insert ID: %d", lastInsertID)
+		Log.PrintLnColor(color.FgGreen, "Last insert ID: %d", lastInsertID)
 	}
 	rowsAffected, err := result.RowsAffected()
 	if err == nil {
-		Log.PrintColor(color.FgGreen, "Rows affected: %d", rowsAffected)
+		Log.PrintLnColor(color.FgGreen, "Rows affected: %d", rowsAffected)
 	}
 }
 

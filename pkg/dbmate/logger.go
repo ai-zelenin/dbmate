@@ -26,7 +26,12 @@ func (l *logger) Fprintln(w io.Writer, args ...interface{}) {
 func (l *logger) Fprint(w io.Writer, args ...interface{}) {
 	_, _ = fmt.Fprint(w, args...)
 }
-
-func (l *logger) PrintColor(a color.Attribute, format string, args ...interface{}) {
+func (l *logger) FPrintColor(w io.Writer, a color.Attribute, format string, args ...interface{}) {
+	_, _ = color.New(a).Fprintln(w, fmt.Sprintf(format, args...))
+}
+func (l *logger) PrintLnColor(a color.Attribute, format string, args ...interface{}) {
 	_, _ = color.New(a).Fprintln(l.w, fmt.Sprintf(format, args...))
+}
+func (l *logger) PrintColor(a color.Attribute, format string, args ...interface{}) {
+	_, _ = color.New(a).Fprint(l.w, fmt.Sprintf(format, args...))
 }

@@ -26,7 +26,7 @@ func main() {
 
 	if err != nil {
 		errText := redactLogString(fmt.Sprintf("Error: %s\n", err))
-		_, _ = fmt.Fprint(os.Stderr, errText)
+		dbmate.Log.FPrintColor(os.Stderr, color.FgRed, errText)
 		os.Exit(2)
 	}
 }
@@ -37,9 +37,6 @@ func NewApp() *cli.App {
 	app.Name = "dbmate"
 	app.Usage = "A lightweight, framework-independent database migration tool."
 	app.Version = dbmate.Version
-	app.ExitErrHandler = func(c *cli.Context, err error) {
-		dbmate.Log.PrintColor(color.FgRed, err.Error())
-	}
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:    "url",

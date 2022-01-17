@@ -1,47 +1,81 @@
 package dbmate
 
-import "strings"
+import (
+	"regexp"
+	"sort"
+	"strings"
+)
+
+type IgnoreToken struct {
+	BeginSeq   string
+	EndSeq     string
+	Pattern    *regexp.Regexp
+	Flag       bool
+	BeginIndex int
+	EndIndex   int
+}
 
 type SQLStatementSplitter struct {
-	ignoreSeq   map[string]string
-	ignoreFlags map[string]bool
+	autoIgnorePatterns []*regexp.Regexp
+	manualSplitPattern *regexp.Regexp
 }
 
 func NewSQLStatementSplitter() *SQLStatementSplitter {
 	return &SQLStatementSplitter{
-		ignoreSeq: map[string]string{
-			"'":      "'",
-			"--":     "\n",
-			"$body$": "$body$",
+		autoIgnorePatterns: []*regexp.Regexp{
+			regexp.MustCompile(`--.*\n|'.*'`),
+			regexp.MustCompile(`(?sU:\$[a-zA-Z_]*\$.*\$[a-zA-Z_]*\$)`),
 		},
-		ignoreFlags: map[string]bool{},
+		manualSplitPattern: regexp.MustCompile(`--\s?-{2,}`),
 	}
 }
 
-func (s *SQLStatementSplitter) Split(text string) []string {
-	runes := []rune(text)
-	splitIndexes := make([]int, 0)
-	statements := make([]string, 0)
-
-	for i, r := range runes {
-		for begin, end := range s.ignoreSeq {
-			if s.lookForward(runes, i, begin) {
-				if !s.ignoreFlags[begin+end] {
-					s.ignoreFlags[begin+end] = true
-					continue
-				}
+func (s *SQLStatementSplitter) SplitAuto(text string) []string {
+	var ignores = make([]IgnoreToken, 0)
+	for _, pattern := range s.autoIgnorePatterns {
+		matches := pattern.FindAllStringIndex(text, -1)
+		for _, match := range matches {
+			ignore := IgnoreToken{
+				BeginIndex: match[0],
+				EndIndex:   match[1],
 			}
-			if s.lookForward(runes, i, end) {
-				if s.ignoreFlags[begin+end] {
-					s.ignoreFlags[begin+end] = false
-					continue
-				}
-			}
-		}
-		if r == ';' && !s.IsSkip() {
-			splitIndexes = append(splitIndexes, i+1)
+			ignores = append(ignores, ignore)
 		}
 	}
+	sort.Slice(ignores, func(i, j int) bool {
+		return ignores[i].BeginIndex < ignores[j].BeginIndex
+	})
+
+	splitIndexes := make([]int, 0)
+
+	i := 0
+	for {
+		if i >= len(text) {
+			break
+		}
+		r := text[i]
+		skip := false
+		for _, ignore := range ignores {
+			if i >= ignore.BeginIndex && i < ignore.EndIndex {
+				skip = true
+				break
+			}
+		}
+		if r == ';' && !skip {
+			splitIndexes = append(splitIndexes, i+1)
+		}
+		i++
+	}
+
+	return s.splitByIndexes(text, splitIndexes)
+}
+
+func (s *SQLStatementSplitter) SplitManual(text string) []string {
+	return s.manualSplitPattern.Split(text, -1)
+}
+
+func (s *SQLStatementSplitter) splitByIndexes(text string, splitIndexes []int) []string {
+	statements := make([]string, 0)
 	for i, index := range splitIndexes {
 		var statement string
 		var from int
@@ -50,49 +84,11 @@ func (s *SQLStatementSplitter) Split(text string) []string {
 			from = splitIndexes[i-1]
 		}
 		to = index
-		statement = string(runes[from:to])
+		statement = text[from:to]
 		statement = strings.TrimFunc(statement, func(r rune) bool {
 			return r == ' ' || r == '\n'
 		})
 		statements = append(statements, statement)
 	}
 	return statements
-}
-
-func (s *SQLStatementSplitter) IsSkip() bool {
-	for _, b := range s.ignoreFlags {
-		if b {
-			return true
-		}
-	}
-	return false
-}
-
-func (s *SQLStatementSplitter) lookForward(src []rune, index int, seq string) bool {
-	if seq == "" {
-		if index == len(seq)-1 {
-			return true
-		} else {
-			return false
-		}
-	}
-	rseq := []rune(seq)
-
-	r := src[index]
-	if r == rseq[0] {
-		if len(rseq) == 1 {
-			return true
-		}
-		for i, desiredRune := range rseq {
-			next := index + i
-			if next > len(src)-1 {
-				return false
-			}
-			if src[next] != desiredRune {
-				return false
-			}
-		}
-		return true
-	}
-	return false
 }
